@@ -22,6 +22,10 @@ function emptyDB(): DB {
   };
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 // Tüm veri (kişiler + kriterler + puan geçmişi) tek bir JSON dosyası
 // olarak Vercel Blob'da tutuluyor. Kişisel/tek kullanıcılı bir site için
 // ayrı bir veritabanı sunucusu kurmaya gerek bırakmıyor; ileride gerçek
@@ -29,9 +33,18 @@ function emptyDB(): DB {
 export async function readDB(): Promise<DB> {
   try {
     const blob = await head(DB_PATHNAME);
-    const res = await fetch(blob.url, { cache: "no-store" });
-    if (!res.ok) throw new Error(`db okunamadı: ${res.status}`);
-    return (await res.json()) as DB;
+
+    // Blob az önce yazıldıysa CDN'e yayılması bir kaç yüz milisaniye
+    // sürebiliyor, o pencerede fetch 404 dönebiliyor — kısa bir retry
+    // bu yarış durumunu tolere ediyor.
+    let lastStatus = 0;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      if (attempt > 0) await sleep(250 * attempt);
+      const res = await fetch(blob.url, { cache: "no-store" });
+      if (res.ok) return (await res.json()) as DB;
+      lastStatus = res.status;
+    }
+    throw new Error(`db okunamadı: ${lastStatus}`);
   } catch (err) {
     if (err instanceof BlobNotFoundError) {
       const db = emptyDB();
