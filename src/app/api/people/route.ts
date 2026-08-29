@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/server";
+import { readDB, writeDB } from "@/lib/store";
 import { isPersonTab } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
@@ -12,16 +12,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "İsim gerekli" }, { status: 400 });
   }
 
-  const supabase = supabaseAdmin();
-  const { data, error } = await supabase
-    .from("people")
-    .insert({ tab, name: name.trim(), photo_url: photo_url ?? null })
-    .select("id")
-    .single();
+  const db = await readDB();
+  const person = {
+    id: crypto.randomUUID(),
+    tab,
+    name: name.trim(),
+    photo_url: photo_url ?? null,
+    created_at: new Date().toISOString(),
+  };
+  db.people.push(person);
+  await writeDB(db);
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  return NextResponse.json({ id: data.id });
+  return NextResponse.json({ id: person.id });
 }

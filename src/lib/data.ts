@@ -1,127 +1,86 @@
-import { supabaseAdmin } from "@/lib/supabase/server";
-import type {
-  Category,
-  CategoryScoreRow,
-  Criterion,
-  LatestScoreRow,
-  Person,
-  PersonNote,
-  PersonScoreRow,
-  PersonTab,
-  ScoreEntry,
-} from "@/lib/types";
+import { cache } from "react";
+import { readDB } from "@/lib/store";
+import { categoryScoresForPerson, latestScoresForPerson, overallScoreFromCategories, rankingForTab } from "@/lib/scoring";
+import type { Category, Criterion, Person, PersonScoreRow, PersonTab, ScoreEntry } from "@/lib/types";
+
+// React cache() ile aynı istek içindeki tekrarlı çağrılar tek bir Blob
+// okumasını paylaşır (bkz. [tab]/[id]/page.tsx'teki Promise.all).
+export const getDB = cache(readDB);
 
 export async function getRanking(tab: PersonTab): Promise<PersonScoreRow[]> {
-  const supabase = supabaseAdmin();
-  const { data, error } = await supabase
-    .from("person_scores")
-    .select("*")
-    .eq("tab", tab)
-    .order("overall_score", { ascending: false, nullsFirst: false })
-    .order("name", { ascending: true });
-
-  if (error) throw new Error(error.message);
-  return data as PersonScoreRow[];
+  const db = await getDB();
+  return rankingForTab(db, tab);
 }
 
 export async function getCategoriesWithCriteria(
   tab: PersonTab
 ): Promise<(Category & { criteria: Criterion[] })[]> {
-  const supabase = supabaseAdmin();
-  const { data: categories, error: catError } = await supabase
-    .from("categories")
-    .select("*")
-    .eq("tab", tab)
-    .order("sort_order", { ascending: true });
-
-  if (catError) throw new Error(catError.message);
-
-  const { data: criteria, error: critError } = await supabase
-    .from("criteria")
-    .select("*")
-    .eq("active", true)
-    .order("sort_order", { ascending: true });
-
-  if (critError) throw new Error(critError.message);
-
-  return (categories as Category[]).map((cat) => ({
-    ...cat,
-    criteria: (criteria as Criterion[]).filter((c) => c.category_id === cat.id),
-  }));
+  const db = await getDB();
+  return db.categories
+    .filter((c) => c.tab === tab)
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((cat) => ({
+      ...cat,
+      criteria: db.criteria
+        .filter((c) => c.category_id === cat.id && c.active)
+        .sort((a, b) => a.sort_order - b.sort_order),
+    }));
 }
 
 export async function getPerson(id: string): Promise<Person | null> {
-  const supabase = supabaseAdmin();
-  const { data, error } = await supabase
-    .from("people")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-
-  if (error) throw new Error(error.message);
-  return data as Person | null;
+  const db = await getDB();
+  return db.people.find((p) => p.id === id) ?? null;
 }
 
 export async function getPersonScore(personId: string): Promise<PersonScoreRow | null> {
-  const supabase = supabaseAdmin();
-  const { data, error } = await supabase
-    .from("person_scores")
-    .select("*")
-    .eq("person_id", personId)
-    .maybeSingle();
+  const db = await getDB();
+  const person = db.people.find((p) => p.id === personId);
+  if (!person) return null;
 
-  if (error) throw new Error(error.message);
-  return data as PersonScoreRow | null;
+  const categories = categoryScoresForPerson(db, personId);
+  const lastScoredAt = categories.reduce<string | null>((max, c) => {
+    if (!max) return c.category_last_scored_at;
+    return new Date(c.category_last_scored_at) > new Date(max) ? c.category_last_scored_at : max;
+  }, null);
+
+  return {
+    person_id: person.id,
+    tab: person.tab,
+    name: person.name,
+    photo_url: person.photo_url,
+    created_at: person.created_at,
+    overall_score: overallScoreFromCategories(categories),
+    categories_scored: categories.length,
+    last_scored_at: lastScoredAt,
+  };
 }
 
-export async function getCategoryScores(personId: string): Promise<CategoryScoreRow[]> {
-  const supabase = supabaseAdmin();
-  const { data, error } = await supabase
-    .from("category_scores")
-    .select("*")
-    .eq("person_id", personId);
-
-  if (error) throw new Error(error.message);
-  return data as CategoryScoreRow[];
+export async function getCategoryScores(personId: string) {
+  const db = await getDB();
+  return categoryScoresForPerson(db, personId);
 }
 
-export async function getLatestScores(personId: string): Promise<LatestScoreRow[]> {
-  const supabase = supabaseAdmin();
-  const { data, error } = await supabase
-    .from("latest_scores")
-    .select("*")
-    .eq("person_id", personId);
-
-  if (error) throw new Error(error.message);
-  return data as LatestScoreRow[];
+export async function getLatestScores(personId: string) {
+  const db = await getDB();
+  return latestScoresForPerson(db.scoreEntries, personId);
 }
 
-export async function getScoreHistory(personId: string): Promise<
-  (ScoreEntry & { criterion_label: string })[]
-> {
-  const supabase = supabaseAdmin();
-  const { data, error } = await supabase
-    .from("score_entries")
-    .select("*, criteria(label)")
-    .eq("person_id", personId)
-    .order("scored_at", { ascending: false })
-    .limit(30);
+export async function getScoreHistory(
+  personId: string
+): Promise<(ScoreEntry & { criterion_label: string })[]> {
+  const db = await getDB();
+  const criterionLabel = new Map(db.criteria.map((c) => [c.id, c.label]));
 
-  if (error) throw new Error(error.message);
-  return (data as unknown as (ScoreEntry & { criteria: { label: string } })[]).map((row) => ({
-    ...row,
-    criterion_label: row.criteria?.label ?? "—",
-  }));
+  return db.scoreEntries
+    .filter((e) => e.person_id === personId)
+    .sort((a, b) => new Date(b.scored_at).getTime() - new Date(a.scored_at).getTime())
+    .slice(0, 30)
+    .map((e) => ({ ...e, criterion_label: criterionLabel.get(e.criterion_id) ?? "—" }));
 }
 
-export async function getPersonNotes(personId: string): Promise<PersonNote[]> {
-  const supabase = supabaseAdmin();
-  const { data, error } = await supabase
-    .from("person_notes")
-    .select("*")
-    .eq("person_id", personId)
-    .order("created_at", { ascending: false });
-
-  if (error) throw new Error(error.message);
-  return data as PersonNote[];
+export async function getPersonNotes(personId: string) {
+  const db = await getDB();
+  return db.personNotes
+    .filter((n) => n.person_id === personId)
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 }
