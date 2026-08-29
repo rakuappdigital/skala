@@ -1,0 +1,472 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------
+   skala — kasıtlı olarak tek temalı: sıcak, koyu, "özel defter" hissi.
+   Sistem temasına göre değişmiyor; bu bilinçli bir tasarım kararı.
+------------------------------------------------------------------- */
+:root {
+  --bg: #0c0b09;
+  --bg-raised: #151310;
+  --bg-card: #18150f;
+  --border: #2a2620;
+  --border-soft: #201d17;
+  --text: #f2ede2;
+  --text-muted: #a89f8c;
+  --text-faint: #6f6858;
+  --accent: #c9a15a;
+  --accent-strong: #e0b96f;
+  --accent-soft: #c9a15a1f;
+  --good: #7fa876;
+  --bad: #b76a5d;
+
+  --font-display: "Fraunces", Georgia, serif;
+  --font-body: "Public Sans", -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --radius: 14px;
+  --avatar-sm: 40px;
+  --avatar-md: 64px;
+  --avatar-lg: 128px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 15.5px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  text-wrap: balance;
+  margin: 0;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- layout shell ---------- */
+.shell {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 40px 24px 100px;
+}
+
+.topbar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 32px;
+}
+
+.wordmark {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 22px;
+  color: var(--accent-strong);
+  letter-spacing: 0.01em;
+}
+
+/* ---------- tab nav ---------- */
+.tabnav {
+  display: flex;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px;
+  background: var(--bg-raised);
+  width: fit-content;
+  margin-bottom: 28px;
+}
+
+.tabnav a {
+  padding: 8px 18px;
+  border-radius: 999px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.tabnav a.active {
+  color: #17140d;
+  background: var(--accent);
+}
+
+/* ---------- buttons ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: var(--bg-raised);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.btn:hover {
+  border-color: var(--accent);
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #17140d;
+}
+
+.btn-primary:hover {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-muted);
+}
+
+.btn-ghost:hover {
+  color: var(--text);
+  border-color: var(--border);
+}
+
+/* ---------- avatars: her yerde sabit boyut, taşma yok ---------- */
+.avatar {
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  background: var(--bg-raised);
+  flex-shrink: 0;
+  display: block;
+}
+
+.avatar-sm {
+  width: var(--avatar-sm);
+  height: var(--avatar-sm);
+}
+
+.avatar-md {
+  width: var(--avatar-md);
+  height: var(--avatar-md);
+}
+
+.avatar-lg {
+  width: var(--avatar-lg);
+  height: var(--avatar-lg);
+}
+
+.avatar-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  color: var(--text-faint);
+}
+
+/* ---------- ranking table ---------- */
+.rank-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg-card);
+}
+
+.rank-row {
+  display: grid;
+  grid-template-columns: 32px var(--avatar-sm) 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-soft);
+  transition: background 0.12s ease;
+}
+
+.rank-row:last-child {
+  border-bottom: none;
+}
+
+.rank-row:hover {
+  background: var(--bg-raised);
+}
+
+.rank-num {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-faint);
+}
+
+.rank-row:nth-child(1) .rank-num {
+  color: var(--accent-strong);
+}
+
+.rank-name {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.rank-meta {
+  font-size: 12px;
+  color: var(--text-faint);
+  margin-top: 1px;
+}
+
+.rank-score {
+  font-family: var(--font-mono);
+  font-size: 19px;
+  font-weight: 500;
+  color: var(--accent-strong);
+}
+
+.rank-score.pending {
+  color: var(--text-faint);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.empty-state {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--text-faint);
+  font-size: 14px;
+}
+
+/* ---------- cards ---------- */
+.card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  padding: 20px;
+}
+
+/* ---------- category bars ---------- */
+.category-bar {
+  margin-bottom: 16px;
+}
+
+.category-bar-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+  font-size: 13.5px;
+}
+
+.category-bar-head .label {
+  font-weight: 600;
+}
+
+.category-bar-head .value {
+  font-family: var(--font-mono);
+  color: var(--accent-strong);
+}
+
+.category-bar-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--bg-raised);
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+}
+
+.category-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent) 0%, var(--accent-strong) 100%);
+}
+
+/* ---------- forms ---------- */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.field label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+input[type="text"],
+input[type="password"],
+input[type="number"],
+textarea {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14.5px;
+  color: var(--text);
+  font-family: var(--font-body);
+  width: 100%;
+}
+
+input:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+textarea {
+  resize: vertical;
+  min-height: 64px;
+}
+
+.criterion-row {
+  display: grid;
+  grid-template-columns: 1fr 72px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.criterion-row:last-child {
+  border-bottom: none;
+}
+
+.criterion-row label {
+  font-size: 14px;
+  color: var(--text);
+  text-transform: none;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.criterion-row input[type="number"] {
+  text-align: center;
+  font-family: var(--font-mono);
+}
+
+/* ---------- photo uploader: sabit yükseklik, büyümez ---------- */
+.uploader {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.uploader-preview {
+  width: var(--avatar-lg);
+  height: var(--avatar-lg);
+  border-radius: 50%;
+  border: 1px dashed var(--border);
+  background: var(--bg-raised);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.uploader-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.uploader-hint {
+  font-size: 12.5px;
+  color: var(--text-faint);
+  max-width: 24ch;
+}
+
+/* ---------- history ---------- */
+.history-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 13.5px;
+}
+
+.history-item:last-child {
+  border-bottom: none;
+}
+
+.history-item .criterion {
+  color: var(--text-muted);
+}
+
+.history-item .when {
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+/* ---------- misc ---------- */
+.section-title {
+  font-size: 11.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.back-link {
+  font-size: 13.5px;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+  display: inline-block;
+}
+
+.back-link:hover {
+  color: var(--accent);
+}
+
+.error-text {
+  color: var(--bad);
+  font-size: 13px;
+}
+
+.login-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 340px;
+}
