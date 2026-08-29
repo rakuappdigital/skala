@@ -34,13 +34,13 @@ export async function readDB(): Promise<DB> {
   try {
     const blob = await head(DB_PATHNAME);
 
-    // Blob az önce yazıldıysa CDN'e yayılması bir kaç yüz milisaniye
-    // sürebiliyor, o pencerede fetch 404 dönebiliyor — kısa bir retry
-    // bu yarış durumunu tolere ediyor.
+    // Blob az önce yazıldıysa/silindiyse CDN kenarında bir süre negatif
+    // önbelleklenebiliyor (404 cache'leniyor). Sorgu param'ı ekleyip
+    // cache'i by-pass ediyoruz, ayrıca kısa bir retry uyguluyoruz.
     let lastStatus = 0;
-    for (let attempt = 0; attempt < 4; attempt++) {
-      if (attempt > 0) await sleep(250 * attempt);
-      const res = await fetch(blob.url, { cache: "no-store" });
+    for (let attempt = 0; attempt < 5; attempt++) {
+      if (attempt > 0) await sleep(300 * attempt);
+      const res = await fetch(`${blob.url}?v=${Date.now()}`, { cache: "no-store" });
       if (res.ok) return (await res.json()) as DB;
       lastStatus = res.status;
     }
