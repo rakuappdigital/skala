@@ -56,11 +56,23 @@ export async function readDB(): Promise<DB> {
 }
 
 export async function writeDB(db: DB): Promise<void> {
-  await put(DB_PATHNAME, JSON.stringify(db), {
+  const payload = JSON.stringify(db);
+  const blob = await put(DB_PATHNAME, payload, {
     access: "public",
     addRandomSuffix: false,
     allowOverwrite: true,
     contentType: "application/json",
     cacheControlMaxAge: 0,
   });
+
+  // Yeni kişi eklendikten hemen sonra detay sayfasına yönlendirmek gibi
+  // "yaz sonra hemen oku" akışları var. Overwrite sonrası CDN kenarında
+  // eski içerik bir süre görünebildiğinden, bir sonraki okumanın güncel
+  // veriyi bulması için burada içeriği doğrulanana kadar kısaca bekliyoruz
+  // (best-effort — sonsuza kadar bloklamaz).
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const res = await fetch(`${blob.url}?v=${Date.now()}-${attempt}`, { cache: "no-store" });
+    if (res.ok && (await res.text()) === payload) return;
+    await sleep(200 * (attempt + 1));
+  }
 }
