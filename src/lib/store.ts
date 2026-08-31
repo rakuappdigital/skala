@@ -1,4 +1,4 @@
-import { BlobNotFoundError, head, put } from "@vercel/blob";
+import { del, list, put } from "@vercel/blob";
 import { seedCategories, seedCriteria } from "@/lib/seed";
 import type { Category, Criterion, Person, PersonNote, ScoreEntry } from "@/lib/types";
 
@@ -10,7 +10,15 @@ export interface DB {
   personNotes: PersonNote[];
 }
 
-const DB_PATHNAME = "skala/db.json";
+// Overwriting the same blob pathname repeatedly turned out to be
+// unreliable: Vercel Blob's CDN can keep serving the previous version
+// of a URL for a while after an overwrite, so a page loaded right
+// after a write could read stale data (a just-created person would
+// briefly 404). Each write is now a new, never-before-seen blob under
+// this prefix — immutable URLs can't go stale — and reads pick the
+// newest one via list(). Old versions are pruned after each write.
+const DB_PREFIX = "skala/db/";
+const KEEP_VERSIONS = 2;
 
 function emptyDB(): DB {
   return {
@@ -22,57 +30,33 @@ function emptyDB(): DB {
   };
 }
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// Tüm veri (kişiler + kriterler + puan geçmişi) tek bir JSON dosyası
-// olarak Vercel Blob'da tutuluyor. Kişisel/tek kullanıcılı bir site için
-// ayrı bir veritabanı sunucusu kurmaya gerek bırakmıyor; ileride gerçek
-// bir veritabanına geçmek istersen bu dosya tek değişim noktası.
 export async function readDB(): Promise<DB> {
-  try {
-    const blob = await head(DB_PATHNAME);
+  const { blobs } = await list({ prefix: DB_PREFIX });
 
-    // Blob az önce yazıldıysa/silindiyse CDN kenarında bir süre negatif
-    // önbelleklenebiliyor (404 cache'leniyor). Sorgu param'ı ekleyip
-    // cache'i by-pass ediyoruz, ayrıca kısa bir retry uyguluyoruz.
-    let lastStatus = 0;
-    for (let attempt = 0; attempt < 5; attempt++) {
-      if (attempt > 0) await sleep(300 * attempt);
-      const res = await fetch(`${blob.url}?v=${Date.now()}`, { cache: "no-store" });
-      if (res.ok) return (await res.json()) as DB;
-      lastStatus = res.status;
-    }
-    throw new Error(`db okunamadı: ${lastStatus}`);
-  } catch (err) {
-    if (err instanceof BlobNotFoundError) {
-      const db = emptyDB();
-      await writeDB(db);
-      return db;
-    }
-    throw err;
+  if (blobs.length === 0) {
+    const db = emptyDB();
+    await writeDB(db);
+    return db;
   }
+
+  const latest = blobs.reduce((a, b) => (a.uploadedAt > b.uploadedAt ? a : b));
+  const res = await fetch(latest.url, { cache: "no-store" });
+  if (!res.ok) throw new Error(`db okunamadı: ${res.status}`);
+  return (await res.json()) as DB;
 }
 
 export async function writeDB(db: DB): Promise<void> {
-  const payload = JSON.stringify(db);
-  const blob = await put(DB_PATHNAME, payload, {
+  const pathname = `${DB_PREFIX}${Date.now()}-${crypto.randomUUID()}.json`;
+  await put(pathname, JSON.stringify(db), {
     access: "public",
-    addRandomSuffix: false,
-    allowOverwrite: true,
     contentType: "application/json",
-    cacheControlMaxAge: 0,
   });
 
-  // Yeni kişi eklendikten hemen sonra detay sayfasına yönlendirmek gibi
-  // "yaz sonra hemen oku" akışları var. Overwrite sonrası CDN kenarında
-  // eski içerik bir süre görünebildiğinden, bir sonraki okumanın güncel
-  // veriyi bulması için burada içeriği doğrulanana kadar kısaca bekliyoruz
-  // (best-effort — sonsuza kadar bloklamaz).
-  for (let attempt = 0; attempt < 6; attempt++) {
-    const res = await fetch(`${blob.url}?v=${Date.now()}-${attempt}`, { cache: "no-store" });
-    if (res.ok && (await res.text()) === payload) return;
-    await sleep(200 * (attempt + 1));
+  const { blobs } = await list({ prefix: DB_PREFIX });
+  const stale = blobs
+    .sort((a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime())
+    .slice(KEEP_VERSIONS);
+  if (stale.length > 0) {
+    await del(stale.map((b) => b.url));
   }
 }
